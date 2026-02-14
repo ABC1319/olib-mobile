@@ -6,6 +6,7 @@ import '../models/book.dart';
 import '../services/zlibrary_api.dart';
 import '../services/storage_service.dart';
 import 'zlibrary_provider.dart';
+
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
@@ -49,10 +50,10 @@ class DownloadTask {
 
 class DownloadNotifier extends StateNotifier<List<DownloadTask>> {
   final ZLibraryApi _api;
-  final StorageService _storage = StorageService();
+  final StorageService _storage;
   final Map<String, CancelToken> _cancelTokens = {};
 
-  DownloadNotifier(this._api) : super([]) {
+  DownloadNotifier(this._api, this._storage) : super([]) {
     // Load persisted download history on initialization
     _loadDownloadHistory();
   }
@@ -342,5 +343,6 @@ class DownloadNotifier extends StateNotifier<List<DownloadTask>> {
 
 final downloadProvider = StateNotifierProvider<DownloadNotifier, List<DownloadTask>>((ref) {
   final api = ref.watch(zlibraryApiProvider);
-  return DownloadNotifier(api);
+  final storage = ref.watch(storageServiceProvider);
+  return DownloadNotifier(api, storage);
 });

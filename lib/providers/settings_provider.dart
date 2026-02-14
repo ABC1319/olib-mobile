@@ -44,7 +44,7 @@ class ThemeModeNotifier extends StateNotifier<AppThemeMode> {
 /// Theme mode provider
 final themeModeProvider =
     StateNotifierProvider<ThemeModeNotifier, AppThemeMode>((ref) {
-  return ThemeModeNotifier(StorageService());
+  return ThemeModeNotifier(ref.watch(storageServiceProvider));
 });
 
 /// Download path notifier for custom download directory (Android only)
@@ -74,7 +74,7 @@ class DownloadPathNotifier extends StateNotifier<String?> {
 /// Download path provider
 final downloadPathProvider = 
     StateNotifierProvider<DownloadPathNotifier, String?>((ref) {
-  return DownloadPathNotifier(StorageService());
+  return DownloadPathNotifier(ref.watch(storageServiceProvider));
 });
 
 /// Locale notifier for managing app language

@@ -1,5 +1,11 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'hive_service.dart';
+
+/// Riverpod provider for StorageService (singleton)
+final storageServiceProvider = Provider<StorageService>((ref) {
+  return StorageService();
+});
 
 class StorageService {
   static const String _keyFavorites = 'favorite_books';
@@ -10,22 +16,24 @@ class StorageService {
 
   /// Save favorite book IDs
   Future<void> saveFavorites(List<String> bookIds) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      _keyFavorites,
-      bookIds,
-    );
+    await HiveService.settingsBox.put(_keyFavorites, bookIds);
   }
 
   /// Get favorite book IDs
+  List<String> getFavoritesSync() {
+    final data = HiveService.settingsBox.get(_keyFavorites);
+    if (data == null) return [];
+    return List<String>.from(data);
+  }
+
+  /// Get favorite book IDs (async for API compatibility)
   Future<List<String>> getFavorites() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_keyFavorites) ?? [];
+    return getFavoritesSync();
   }
 
   /// Add book to favorites
   Future<void> addFavorite(String bookId) async {
-    final favorites = await getFavorites();
+    final favorites = getFavoritesSync();
     if (!favorites.contains(bookId)) {
       favorites.add(bookId);
       await saveFavorites(favorites);
@@ -34,48 +42,43 @@ class StorageService {
 
   /// Remove book from favorites
   Future<void> removeFavorite(String bookId) async {
-    final favorites = await getFavorites();
+    final favorites = getFavoritesSync();
     favorites.remove(bookId);
     await saveFavorites(favorites);
   }
 
   /// Check if book is favorited
   Future<bool> isFavorite(String bookId) async {
-    final favorites = await getFavorites();
+    final favorites = getFavoritesSync();
     return favorites.contains(bookId);
   }
 
   /// Save downloaded book info
   Future<void> saveDownloadedBook(Map<String, dynamic> bookInfo) async {
-    final prefs = await SharedPreferences.getInstance();
-    final downloads = prefs.getStringList(_keyDownloads) ?? [];
-    // Store as JSON string
+    final data = HiveService.settingsBox.get(_keyDownloads);
+    final downloads = data != null ? List<String>.from(data) : <String>[];
     downloads.add(bookInfo.toString());
-    await prefs.setStringList(_keyDownloads, downloads);
+    await HiveService.settingsBox.put(_keyDownloads, downloads);
   }
 
   /// Get theme mode (0: system, 1: light, 2: dark)
   Future<int> getThemeMode() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_keyThemeMode) ?? 0;
+    return HiveService.settingsBox.get(_keyThemeMode, defaultValue: 0) as int;
   }
 
   /// Set theme mode
   Future<void> setThemeMode(int mode) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_keyThemeMode, mode);
+    await HiveService.settingsBox.put(_keyThemeMode, mode);
   }
 
   /// Get download path
   Future<String?> getDownloadPath() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyDownloadPath);
+    return HiveService.settingsBox.get(_keyDownloadPath) as String?;
   }
 
   /// Set download path
   Future<void> setDownloadPath(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyDownloadPath, path);
+    await HiveService.settingsBox.put(_keyDownloadPath, path);
   }
 
   // ===== Download History Methods =====
@@ -89,8 +92,7 @@ class StorageService {
     String filePath, 
     {String? cover, String? extension}
   ) async {
-    final prefs = await SharedPreferences.getInstance();
-    final historyJson = prefs.getString(_keyDownloadHistory) ?? '{}';
+    final historyJson = HiveService.settingsBox.get(_keyDownloadHistory, defaultValue: '{}') as String;
     final history = Map<String, dynamic>.from(jsonDecode(historyJson));
     
     history[bookId] = {
@@ -102,13 +104,12 @@ class StorageService {
       'downloadTime': DateTime.now().toIso8601String(),
     };
     
-    await prefs.setString(_keyDownloadHistory, jsonEncode(history));
+    await HiveService.settingsBox.put(_keyDownloadHistory, jsonEncode(history));
   }
 
   /// Get all download history
   Future<Map<String, dynamic>> getDownloadHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final historyJson = prefs.getString(_keyDownloadHistory) ?? '{}';
+    final historyJson = HiveService.settingsBox.get(_keyDownloadHistory, defaultValue: '{}') as String;
     return Map<String, dynamic>.from(jsonDecode(historyJson));
   }
 
@@ -129,12 +130,11 @@ class StorageService {
 
   /// Remove book from download history
   Future<void> removeFromDownloadHistory(String bookId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final historyJson = prefs.getString(_keyDownloadHistory) ?? '{}';
+    final historyJson = HiveService.settingsBox.get(_keyDownloadHistory, defaultValue: '{}') as String;
     final history = Map<String, dynamic>.from(jsonDecode(historyJson));
     
     history.remove(bookId);
     
-    await prefs.setString(_keyDownloadHistory, jsonEncode(history));
+    await HiveService.settingsBox.put(_keyDownloadHistory, jsonEncode(history));
   }
 }

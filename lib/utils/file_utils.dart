@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:open_filex/open_filex.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:android_intent_plus/android_intent.dart';
 
 /// Check if platform supports opening folder in file manager
 bool get canOpenFolder {
@@ -14,27 +15,44 @@ bool get canOpenFolder {
 Future<bool> openDownloadFolder() async {
   try {
     if (Platform.isAndroid) {
-      // On Android, try to open the Olib folder in Downloads using url_launcher
-      final path = '/storage/emulated/0/Download/Olib';
-      final dir = Directory(path);
-      
-      // If Olib folder exists, try to open it; otherwise open Downloads
-      String targetPath = await dir.exists() ? path : '/storage/emulated/0/Download';
-      
-      // Use url_launcher with file:// URI
-      final uri = Uri.parse('file://$targetPath');
-      if (await canLaunchUrl(uri)) {
-        return await launchUrl(uri);
+      // Use Intent to open the Downloads folder in the system file manager
+      try {
+        final intent = AndroidIntent(
+          action: 'android.intent.action.VIEW',
+          data: 'content://com.android.externalstorage.documents/document/primary%3ADownload%2FOlib',
+          type: 'vnd.android.document/directory',
+          flags: <int>[0x10000000], // FLAG_ACTIVITY_NEW_TASK
+        );
+        await intent.launch();
+        return true;
+      } catch (_) {
+        // Fallback: try to open the general Downloads folder
+        try {
+          final intent = AndroidIntent(
+            action: 'android.intent.action.VIEW',
+            data: 'content://com.android.externalstorage.documents/root/primary%3ADownload',
+            type: 'vnd.android.document/root',
+            flags: <int>[0x10000000],
+          );
+          await intent.launch();
+          return true;
+        } catch (_) {
+          // Last fallback: open the system file manager app
+          try {
+            final intent = AndroidIntent(
+              action: 'android.intent.action.MAIN',
+              category: 'android.intent.category.APP_FILES',
+              flags: <int>[0x10000000],
+            );
+            await intent.launch();
+            return true;
+          } catch (_) {
+            return false;
+          }
+        }
       }
-      
-      // Fallback: Use content:// URI for Downloads
-      final contentUri = Uri.parse('content://com.android.externalstorage.documents/document/primary:Download');
-      if (await canLaunchUrl(contentUri)) {
-        return await launchUrl(contentUri);
-      }
-      
-      return false;
     } else if (Platform.isWindows) {
+
       // Get the actual Downloads folder on Windows
       final downloadsDir = await getDownloadsDirectory();
       final path = downloadsDir?.path ?? r'C:\Users\Public\Downloads';

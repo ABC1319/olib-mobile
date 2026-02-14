@@ -218,7 +218,7 @@ class SavedBooksNotifier extends StateNotifier<AsyncValue<List<Book>>> {
 final savedBooksProvider =
     StateNotifierProvider<SavedBooksNotifier, AsyncValue<List<Book>>>((ref) {
   final api = ref.watch(zlibraryApiProvider);
-  final storage = StorageService();
+  final storage = ref.watch(storageServiceProvider);
   return SavedBooksNotifier(api, storage);
 });
 
@@ -240,6 +240,6 @@ final downloadedBooksProvider = FutureProvider<List<Book>>((ref) async {
 /// Check if a book is favorited
 final isBookFavoritedProvider =
     FutureProvider.family<bool, String>((ref, bookId) async {
-  final storage = StorageService();
+  final storage = ref.watch(storageServiceProvider);
   return await storage.isFavorite(bookId);
 });
