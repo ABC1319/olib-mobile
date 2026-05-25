@@ -1,19 +1,19 @@
-class RegisterResponse {
+/// `/auth/register` 返回 — anon 握手 token，**没有** user_id / role。
+/// 后端语义：register 仅签发匿名 device JWT（audience=anon），
+/// 真正的用户身份要等用户扫码授权后由 `/auth/status` 返回正式 token 才有。
+class AnonTokenResponse {
   final String token;
-  final int userId;
-  final String role;
+  final int expiresIn; // 秒
 
-  const RegisterResponse({
+  const AnonTokenResponse({
     required this.token,
-    required this.userId,
-    required this.role,
+    required this.expiresIn,
   });
 
-  factory RegisterResponse.fromJson(Map<String, dynamic> json) {
-    return RegisterResponse(
+  factory AnonTokenResponse.fromJson(Map<String, dynamic> json) {
+    return AnonTokenResponse(
       token: json['token'] as String,
-      userId: json['user_id'] as int,
-      role: json['role'] as String,
+      expiresIn: json['expires_in'] as int? ?? 30 * 60,
     );
   }
 }

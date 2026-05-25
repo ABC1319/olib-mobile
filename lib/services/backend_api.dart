@@ -14,7 +14,7 @@ class BackendApi {
     ));
   }
 
-  Future<RegisterResponse> register({
+  Future<AnonTokenResponse> register({
     required String deviceId,
     String platform = 'android',
   }) async {
@@ -22,7 +22,7 @@ class BackendApi {
       'device_id': deviceId,
       'platform': platform,
     });
-    return _parseResponse(response, RegisterResponse.fromJson);
+    return _parseResponse(response, AnonTokenResponse.fromJson);
   }
 
   Future<QrCodeResponse> getQrCode(String token) async {

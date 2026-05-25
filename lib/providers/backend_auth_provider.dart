@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/backend_api.dart';
 import '../services/hive_service.dart';
@@ -157,22 +158,23 @@ class BackendAuthNotifier extends StateNotifier<BackendAuthState> {
     return deviceId;
   }
 
-  /// 设备注册 → 拿到临时 JWT
+  /// 设备注册 → 拿到 anon 握手 JWT。
+  /// 注意：anon token 不代表已授权，仅用于调 /auth/qrcode 和轮询 /auth/status；
+  /// 用户扫码后 /status 会签发正式 olib token 替换它。
   Future<void> register() async {
     try {
       final deviceId = await _getDeviceId();
       final response = await _api.register(deviceId: deviceId);
 
-      await _saveAuth(response.token, response.role, response.userId);
+      // 仅保存 anon JWT；之前可能残留的 role/userId 一并清掉，避免误判已授权。
+      final box = HiveService.authBox;
+      await box.put(_kJwt, response.token);
+      await box.delete(_kRole);
+      await box.delete(_kUserId);
 
-      final authorized = response.role == 'authorized' || response.role == 'admin';
       state = BackendAuthState(
-        status: authorized
-            ? BackendAuthStatus.authorized
-            : BackendAuthStatus.unauthorized,
+        status: BackendAuthStatus.unauthorized,
         jwt: response.token,
-        role: response.role,
-        userId: response.userId,
       );
     } catch (e) {
       state = BackendAuthState(
@@ -182,29 +184,37 @@ class BackendAuthNotifier extends StateNotifier<BackendAuthState> {
     }
   }
 
-  /// 获取二维码 URL
+  /// 获取二维码 URL。anon JWT 过期（401）时自动 re-register 一次再重试。
   Future<void> fetchQrCode() async {
     if (state.jwt == null) await register();
     if (state.jwt == null) return;
 
     try {
       final response = await _api.getQrCode(state.jwt!);
-
-      if (response.qrUrl.isEmpty) {
-        // 后端说已授权，无需二维码
-        await _saveAuth(state.jwt!, 'authorized', state.userId);
-        state = state.copyWith(
-          status: BackendAuthStatus.authorized,
-          role: 'authorized',
-        );
-        return;
-      }
-
       state = state.copyWith(
         qrUrl: response.qrUrl,
         qrExpireSeconds: response.expireSeconds,
         error: null,
       );
+    } on DioException catch (e) {
+      // anon token 30 分钟过期 / audience 错误（残留旧 olib token）→ 重新拿 anon。
+      if (e.response?.statusCode == 401) {
+        await register();
+        if (state.jwt == null) return;
+        try {
+          final response = await _api.getQrCode(state.jwt!);
+          state = state.copyWith(
+            qrUrl: response.qrUrl,
+            qrExpireSeconds: response.expireSeconds,
+            error: null,
+          );
+          return;
+        } catch (e2) {
+          state = state.copyWith(error: '获取二维码失败: $e2');
+          return;
+        }
+      }
+      state = state.copyWith(error: '获取二维码失败: ${e.message ?? e}');
     } catch (e) {
       state = state.copyWith(error: '获取二维码失败: $e');
     }
