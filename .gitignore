@@ -1,3 +1,6 @@
+# Sensitive — do not track
+olib-api/
+
 # Miscellaneous
 *.class
 *.log
