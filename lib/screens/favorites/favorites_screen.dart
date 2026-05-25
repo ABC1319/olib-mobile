@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/app_localizations.dart';
-import '../../models/book.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../../providers/books_provider.dart';
 import '../../screens/book_detail/book_detail_screen.dart';
 import '../../services/booklist_import_service.dart';

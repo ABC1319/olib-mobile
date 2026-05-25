@@ -79,7 +79,12 @@ dev_docs/*
 # ========================================
 # SENSITIVE SOURCE CODE - DO NOT SHARE
 # ========================================
+# 旧路径，迁到 vendor/olib_api_plugin 后已不存在；保留 ignore 防误 add
 zlibrary_api.dart
+
+# 私有依赖 — Z-Library API 客户端独立 private repo，CI 通过 SSH deploy key 拉
+# 本地需要手动 clone：git clone git@github.com:shiyi-0x7f/olib-api-plugin.git vendor/olib_api_plugin
+vendor/
 # Environment / Secrets
 .env
 .env.*

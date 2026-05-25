@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
-import '../models/book.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../services/booklist_share_codec.dart';
 import '../utils/booklist_file_utils.dart';
 import '../utils/share_utils.dart';

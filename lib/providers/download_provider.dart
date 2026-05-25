@@ -2,8 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
-import '../models/book.dart';
-import '../services/zlibrary_api.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../services/storage_service.dart';
 import 'zlibrary_provider.dart';
 

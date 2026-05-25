@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/zlibrary_provider.dart';
-import '../../models/book.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../../widgets/book_card.dart';
 import '../../widgets/book_list_tile.dart';
 import '../../widgets/loading_widget.dart';

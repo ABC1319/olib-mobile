@@ -5,11 +5,23 @@ name: Build Android APK
 #   - manual workflow_dispatch   → builds + uploads APKs as workflow artifact only
 #
 # Required secrets (configure in repo Settings → Secrets and variables → Actions):
-#   KEYSTORE_BASE64    base64-encoded contents of olib-release-key.jks
-#                      generate locally with:  base64 -w 0 android/app/olib-release-key.jks
-#   KEYSTORE_PASSWORD  storePassword from android/key.properties
-#   KEY_PASSWORD       keyPassword from android/key.properties
-#   KEY_ALIAS          keyAlias from android/key.properties (currently "olib")
+#   KEYSTORE_BASE64        base64-encoded contents of olib-release-key.jks
+#                          generate locally with: base64 -w 0 android/app/olib-release-key.jks
+#   KEYSTORE_PASSWORD      storePassword from android/key.properties
+#   KEY_PASSWORD           keyPassword from android/key.properties
+#   KEY_ALIAS              keyAlias from android/key.properties (currently "olib")
+#   OLIB_API_PLUGIN_DEPLOY_KEY  SSH private key (read-only) for the private
+#                          olib-api-plugin repo. Used to clone the package
+#                          into vendor/olib_api_plugin/ before flutter pub get.
+#                          Generate locally with:
+#                            ssh-keygen -t ed25519 -f olib_api_plugin_deploy -N ""
+#                          Then:
+#                            1. Add olib_api_plugin_deploy.pub as a READ-ONLY
+#                               Deploy key on the private olib-api-plugin repo
+#                               (repo Settings → Deploy keys → Add deploy key)
+#                            2. Paste the contents of olib_api_plugin_deploy
+#                               (the private half) into this Secret
+#                            3. Delete the local key pair after upload
 
 on:
   push:
@@ -80,6 +92,36 @@ jobs:
             echo "::error::Tag '$TAG' does not match pubspec version '$expected'. Run scripts/bump_version.js first."
             exit 1
           fi
+
+      # 拉取私有 olib_api_plugin package 到 vendor/ 目录。pubspec 用 path 依赖，
+      # CI 必须在 flutter pub get 之前把代码 clone 进去。
+      - name: Set up SSH deploy key for olib_api_plugin
+        env:
+          OLIB_API_PLUGIN_DEPLOY_KEY: ${{ secrets.OLIB_API_PLUGIN_DEPLOY_KEY }}
+        run: |
+          if [ -z "$OLIB_API_PLUGIN_DEPLOY_KEY" ]; then
+            echo "::error::OLIB_API_PLUGIN_DEPLOY_KEY secret is missing. See workflow header for setup."
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          echo "$OLIB_API_PLUGIN_DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SSH key installed"
+
+      - name: Clone olib_api_plugin private repo
+        run: |
+          rm -rf vendor/olib_api_plugin
+          mkdir -p vendor
+          git clone --depth 1 git@github.com:shiyi-0x7f/olib-api-plugin.git vendor/olib_api_plugin
+          echo "Cloned olib-api-plugin → vendor/olib_api_plugin/"
+          ls vendor/olib_api_plugin/lib/
+
+      - name: Generate codegen for olib_api_plugin
+        working-directory: vendor/olib_api_plugin
+        run: |
+          dart pub get
+          dart run build_runner build --delete-conflicting-outputs
 
       - name: Cache pub
         uses: actions/cache@v4

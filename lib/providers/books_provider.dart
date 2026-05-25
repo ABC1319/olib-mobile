@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/book.dart';
-import '../services/zlibrary_api.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../services/storage_service.dart';
 import 'zlibrary_provider.dart';
 

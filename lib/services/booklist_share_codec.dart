@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io' show gzip;
 
-import '../models/book.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 
 class BooklistShareData {
   final List<BooklistEntry> entries;

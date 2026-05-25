@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/hive_service.dart';
-import '../services/zlibrary_api.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 import 'auth_provider.dart';
 import 'books_provider.dart';
 import 'zlibrary_provider.dart';

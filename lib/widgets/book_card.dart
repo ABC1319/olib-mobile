@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../models/book.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../theme/app_colors.dart';
 
 class BookCard extends StatefulWidget {

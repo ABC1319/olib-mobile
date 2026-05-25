@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../models/user.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Horizontal hero card showing the signed-in user.

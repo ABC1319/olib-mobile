@@ -13,7 +13,7 @@ import '../../widgets/loading_widget.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/domain_selector.dart';
 import '../../routes/app_routes.dart';
-import '../../models/book.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../../l10n/app_localizations.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {

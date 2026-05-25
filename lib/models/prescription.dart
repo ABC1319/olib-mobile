@@ -1,4 +1,4 @@
-import 'book.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 
 /// 单条阅读推荐
 class ReadingTip {

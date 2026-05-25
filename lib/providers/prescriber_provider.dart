@@ -1,9 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/prescription.dart';
-import '../models/book.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../services/ai_service.dart';
-import '../services/zlibrary_api.dart';
 import 'zlibrary_provider.dart';
 import 'backend_auth_provider.dart';
 

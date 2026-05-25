@@ -2,7 +2,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import '../models/book.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 
 enum ShareStyle {
   museum,    // 极简留白风格

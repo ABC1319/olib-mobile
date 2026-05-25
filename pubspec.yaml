@@ -72,6 +72,11 @@ dependencies:
   json_annotation: ^4.8.1
   mobile_scanner: ^7.1.4
   qr_flutter: ^4.1.0
+
+  # 私有 Z-API 客户端 + 数据模型,不对外开放。源码在 vendor/olib_api_plugin/
+  # （本地 + CI 都从 private repo 拉取，vendor/ 在 .gitignore 里）
+  olib_api_plugin:
+    path: vendor/olib_api_plugin
   receive_sharing_intent: ^1.8.0
 
 dev_dependencies:

@@ -1,8 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/api_response.dart';
-import '../models/user.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../services/auth_storage.dart';
-import '../services/zlibrary_api.dart';
 import 'zlibrary_provider.dart';
 
 class AuthState {

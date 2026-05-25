@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../models/book.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../../../providers/download_provider.dart';
 import '../../../providers/domain_provider.dart';
 import '../../../providers/auth_provider.dart';

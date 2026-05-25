@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/book.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../theme/app_colors.dart';
 
 /// Simplified list tile for books - compact view without cover images

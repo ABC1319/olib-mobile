@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../services/zlibrary_api.dart';
+import 'package:olib_api_plugin/olib_api_plugin.dart';
 
 /// Provider for the ZLibrary API singleton instance
 final zlibraryApiProvider = Provider<ZLibraryApi>((ref) {
