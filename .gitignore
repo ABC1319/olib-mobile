@@ -74,7 +74,7 @@ api_dump/
 test/
 debug/
 publish_page/
-dev_docs/
+dev_docs/*
 
 # ========================================
 # SENSITIVE SOURCE CODE - DO NOT SHARE
