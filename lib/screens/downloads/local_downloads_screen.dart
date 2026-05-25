@@ -66,7 +66,7 @@ class LocalDownloadsScreen extends ConsumerWidget {
               ),
               child: TabBar(
                 indicator: BoxDecoration(
-                  color: AppColors.primary, // Dark Teal
+                  color: AppColors.primary, // Forest Green
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(

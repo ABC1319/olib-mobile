@@ -83,6 +83,13 @@ class _PrescriberScreenState extends ConsumerState<PrescriberScreen>
     FocusScope.of(context).unfocus();
   }
 
+  /// 重试上一次失败：自由输入有内容则用自由输入，否则不动
+  void _retryLastInput() {
+    if (_inputController.text.trim().isNotEmpty) {
+      _diagnoseWithInput();
+    }
+  }
+
   void _reset() {
     ref.read(prescriberProvider.notifier).reset();
     _inputController.clear();
@@ -178,6 +185,8 @@ class _PrescriberScreenState extends ConsumerState<PrescriberScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 12),
+            // 错误提示横条
+            _buildErrorBanner(isZh),
             // 顶部引导文案
             Text(
               isZh ? '选一个最近的状态' : 'Pick your current mood',
@@ -287,6 +296,67 @@ class _PrescriberScreenState extends ConsumerState<PrescriberScreen>
               ),
             ),
             const SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorBanner(bool isZh) {
+    final state = ref.watch(prescriberProvider);
+    if (state.status != PrescriberStatus.error || state.errorMessage == null) {
+      return const SizedBox.shrink();
+    }
+    final canRetry = _inputController.text.trim().isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF3F0),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFFFCDC2)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.error_outline_rounded,
+                color: Color(0xFFE65A3D), size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isZh ? '生成失败' : 'Failed to generate',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFFE65A3D),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    state.errorMessage!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (canRetry)
+              TextButton(
+                onPressed: _retryLastInput,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFE65A3D),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 32),
+                ),
+                child: Text(isZh ? '重试' : 'Retry'),
+              ),
           ],
         ),
       ),

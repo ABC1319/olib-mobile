@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/prescription.dart';
 import '../models/book.dart';
@@ -34,11 +35,13 @@ class PrescriberState {
     ReadingBag? result,
     String? errorMessage,
     String? preferredFormat,
+    bool clearResult = false,
+    bool clearError = false,
   }) {
     return PrescriberState(
       status: status ?? this.status,
-      result: result ?? this.result,
-      errorMessage: errorMessage ?? this.errorMessage,
+      result: clearResult ? null : (result ?? this.result),
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       preferredFormat: preferredFormat ?? this.preferredFormat,
     );
   }
@@ -48,6 +51,10 @@ class PrescriberState {
 class PrescriberNotifier extends StateNotifier<PrescriberState> {
   final AiService _aiService;
   final ZLibraryApi _api;
+
+  // 每次新诊断递增；旧的异步循环检测到不匹配则自我退出
+  int _generation = 0;
+  CancelToken? _diagnoseCancelToken;
 
   PrescriberNotifier(this._aiService, this._api)
       : super(const PrescriberState());
@@ -63,6 +70,10 @@ class PrescriberNotifier extends StateNotifier<PrescriberState> {
     String inputType = 'auto',
     String language = 'zh',
   }) async {
+    final gen = ++_generation;
+    _diagnoseCancelToken?.cancel('new diagnose');
+    final cancelToken = _diagnoseCancelToken = CancelToken();
+
     state = PrescriberState(
       status: PrescriberStatus.loading,
       preferredFormat: state.preferredFormat,
@@ -73,7 +84,9 @@ class PrescriberNotifier extends StateNotifier<PrescriberState> {
         input: input,
         inputType: inputType,
         language: language,
+        cancelToken: cancelToken,
       );
+      if (gen != _generation || !mounted) return;
       state = PrescriberState(
         status: PrescriberStatus.done,
         result: bag,
@@ -81,70 +94,97 @@ class PrescriberNotifier extends StateNotifier<PrescriberState> {
       );
 
       // 异步匹配 ZLibrary 书籍
-      _matchBooks(bag);
+      _matchBooks(bag, gen);
     } catch (e) {
+      if (gen != _generation || !mounted) return;
+      if (e is DioException && CancelToken.isCancel(e)) return;
       state = PrescriberState(
         status: PrescriberStatus.error,
-        errorMessage: e.toString(),
+        errorMessage: _cleanError(e),
         preferredFormat: state.preferredFormat,
       );
     }
   }
 
   /// 异步匹配每本书的 ZLibrary 资源
-  Future<void> _matchBooks(ReadingBag bag) async {
+  Future<void> _matchBooks(ReadingBag bag, int gen) async {
     for (int i = 0; i < bag.tips.length; i++) {
+      if (gen != _generation || !mounted) return;
       final tip = bag.tips[i];
 
-      // 标记正在搜索 — 使用最新 state
-      final currentTips = List<ReadingTip>.from(
-        state.result?.tips ?? bag.tips,
-      );
-      currentTips[i] = tip.copyWith(isSearching: true);
-      state = state.copyWith(
-        result: (state.result ?? bag).copyWith(tips: currentTips),
-      );
+      // 标记正在搜索
+      _updateTip(gen, i, (t) => t.copyWith(isSearching: true));
 
       try {
         final fmt = state.preferredFormat;
-        final response = await _api.search(
-          message: '${tip.bookName} ${tip.author}',
-          extensions: fmt != null ? [fmt] : null,
-          limit: 5,
+        Book? matchedBook = await _searchBook(
+          tip.bookName,
+          tip.author,
+          fmt: fmt,
         );
-
-        Book? matchedBook;
-        if (response.success && response.data != null && response.data!.isNotEmpty) {
-          matchedBook = response.data!.first;
+        // 指定格式没找到时，降级用不限格式再搜一次
+        if (matchedBook == null && fmt != null) {
+          matchedBook = await _searchBook(tip.bookName, tip.author);
+        }
+        // 仍然没有时，仅按书名搜
+        if (matchedBook == null) {
+          matchedBook = await _searchBook(tip.bookName, '');
         }
 
-        // 更新匹配结果 — 使用最新 state
-        final finalTips = List<ReadingTip>.from(
-          state.result?.tips ?? bag.tips,
-        );
-        finalTips[i] = tip.copyWith(
-          matchedBook: matchedBook,
-          isSearching: false,
-        );
-        state = state.copyWith(
-          result: (state.result ?? bag).copyWith(tips: finalTips),
+        if (gen != _generation || !mounted) return;
+        _updateTip(
+          gen,
+          i,
+          (t) => t.copyWith(matchedBook: matchedBook, isSearching: false),
         );
       } catch (_) {
-        // 搜索失败，标记为未搜索
-        final finalTips = List<ReadingTip>.from(
-          state.result?.tips ?? bag.tips,
-        );
-        finalTips[i] = tip.copyWith(isSearching: false);
-        state = state.copyWith(
-          result: (state.result ?? bag).copyWith(tips: finalTips),
-        );
+        if (gen != _generation || !mounted) return;
+        _updateTip(gen, i, (t) => t.copyWith(isSearching: false));
       }
     }
   }
 
+  Future<Book?> _searchBook(String bookName, String author, {String? fmt}) async {
+    final query = author.isEmpty ? bookName : '$bookName $author';
+    final response = await _api.search(
+      message: query,
+      extensions: fmt != null ? [fmt] : null,
+      limit: 5,
+    );
+    if (response.success && response.data != null && response.data!.isNotEmpty) {
+      return response.data!.first;
+    }
+    return null;
+  }
+
+  void _updateTip(int gen, int index, ReadingTip Function(ReadingTip) update) {
+    if (gen != _generation || !mounted) return;
+    final result = state.result;
+    if (result == null || index >= result.tips.length) return;
+    final newTips = List<ReadingTip>.from(result.tips);
+    newTips[index] = update(newTips[index]);
+    state = state.copyWith(result: result.copyWith(tips: newTips));
+  }
+
+  String _cleanError(Object e) {
+    final s = e.toString();
+    // 去掉 "Exception: " 前缀
+    if (s.startsWith('Exception: ')) return s.substring(11);
+    return s;
+  }
+
   /// 重置状态（保留格式设置）
   void reset() {
+    _generation++;
+    _diagnoseCancelToken?.cancel('reset');
+    _diagnoseCancelToken = null;
     state = PrescriberState(preferredFormat: state.preferredFormat);
+  }
+
+  @override
+  void dispose() {
+    _diagnoseCancelToken?.cancel('dispose');
+    super.dispose();
   }
 }
 

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
 import '../models/book.dart';
+import '../services/booklist_share_codec.dart';
+import '../utils/booklist_file_utils.dart';
 import '../utils/share_utils.dart';
 import '../theme/app_colors.dart';
 import 'share_snapshot_widget.dart';
@@ -35,8 +38,40 @@ class _SharePreviewSheetState extends State<SharePreviewSheet> {
   }
 
   String? _generateQrData() {
-    // Disabled per user request due to high data density
-    return null;
+    final ids = widget.books.map((b) => b.id.toString());
+    return BooklistShareCodec.encodeIdsUri(ids);
+  }
+
+  BooklistShareData _buildShareData() {
+    return BooklistShareData(
+      entries: widget.books.map(BooklistEntry.fromBook).toList(),
+      name: _titleController.text.trim().isEmpty
+          ? null
+          : _titleController.text.trim(),
+      exportedAt: DateTime.now(),
+    );
+  }
+
+  Future<void> _copyToken() async {
+    final uri = BooklistShareCodec.encodeFullUri(_buildShareData());
+    await Clipboard.setData(ClipboardData(text: uri));
+    if (!mounted) return;
+    final l = AppLocalizations.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l.get('token_copied'))),
+    );
+  }
+
+  Future<void> _exportJson() async {
+    try {
+      await BooklistFileUtils.exportAndShare(_buildShareData());
+    } catch (e) {
+      if (!mounted) return;
+      final l = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${l.get('error')}: $e')),
+      );
+    }
   }
 
   @override
@@ -166,6 +201,18 @@ class _SharePreviewSheetState extends State<SharePreviewSheet> {
             ),
             child: Row(
               children: [
+                _buildIconAction(
+                  icon: Icons.link_rounded,
+                  tooltip: l.get('copy_token'),
+                  onTap: _copyToken,
+                ),
+                const SizedBox(width: 8),
+                _buildIconAction(
+                  icon: Icons.file_download_outlined,
+                  tooltip: l.get('export_json'),
+                  onTap: _exportJson,
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => Navigator.pop(context),
@@ -199,6 +246,31 @@ class _SharePreviewSheetState extends State<SharePreviewSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildIconAction({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.textSecondary.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Icon(icon, size: 20, color: AppColors.textSecondary),
+        ),
       ),
     );
   }

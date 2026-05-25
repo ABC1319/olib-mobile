@@ -418,10 +418,10 @@ class BookDetailScreen extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFF2EC4B6).withValues(alpha:0.15),
+        color: AppColors.info.withValues(alpha:0.15),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF2EC4B6).withValues(alpha:0.3),
+          color: AppColors.info.withValues(alpha:0.3),
           width: 1,
         ),
       ),
@@ -430,7 +430,7 @@ class BookDetailScreen extends ConsumerWidget {
         style: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF2EC4B6),
+          color: AppColors.info,
         ),
       ),
     );

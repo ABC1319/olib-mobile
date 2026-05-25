@@ -83,3 +83,6 @@ zlibrary_api.dart
 secrets/
 *.pem
 *.p12
+
+#test scripts
+scripts/

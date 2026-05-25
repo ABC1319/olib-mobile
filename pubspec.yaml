@@ -73,6 +73,7 @@ dependencies:
   json_annotation: ^4.8.1
   mobile_scanner: ^7.1.4
   qr_flutter: ^4.1.0
+  receive_sharing_intent: ^1.8.0
 
 dev_dependencies:
   flutter_test:

@@ -20,7 +20,11 @@ import 'screens/prescriber/prescriber_screen.dart';
 import 'screens/auth/qr_auth_screen.dart';
 import 'services/hive_service.dart';
 import 'services/ad_service.dart';
+import 'services/booklist_share_codec.dart';
+import 'services/share_intent_handler.dart';
 import 'l10n/app_localizations.dart';
+
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,13 +40,35 @@ void main() async {
   );
 }
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Fire-and-forget: start listening for shared booklists.
+    ref.read(shareIntentHandlerProvider).start();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final themeModeState = ref.watch(themeModeProvider);
     final locale = ref.watch(localeProvider);
+
+    // When a shared booklist arrives while we're elsewhere in the app,
+    // jump to favorites — that screen consumes the pending data.
+    ref.listen<BooklistShareData?>(pendingBooklistImportProvider,
+        (prev, next) {
+      if (next == null) return;
+      final nav = rootNavigatorKey.currentState;
+      if (nav == null) return;
+      nav.pushNamedAndRemoveUntil(AppRoutes.favorites, (r) => r.isFirst);
+    });
     
     // Convert AppThemeMode to ThemeMode
     ThemeMode themeMode;
@@ -56,6 +82,7 @@ class MyApp extends ConsumerWidget {
     }
 
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       title: 'Olib',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,

@@ -206,9 +206,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFF085858), // Deeper teal
+              Color(0xFF1B4332), // Deeper forest
               AppColors.primary,  // Core primary
-              Color(0xFF0E8C7B), // Brighter teal
+              Color(0xFF40916C), // Lighter forest
             ],
             stops: [0.0, 0.5, 1.0],
           ),
