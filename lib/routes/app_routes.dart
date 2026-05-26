@@ -13,4 +13,7 @@ class AppRoutes {
   static const String reader = '/reader';
   static const String prescriber = '/prescriber';
   static const String qrAuth = '/qr-auth';
+  static const String wereadHome = '/weread';
+  static const String wereadBookDetail = '/weread/book-detail';
+  static const String wereadShelf = '/weread/shelf';
 }

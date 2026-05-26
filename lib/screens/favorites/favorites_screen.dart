@@ -3,17 +3,18 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/app_localizations.dart';
 import 'package:olib_api_plugin/olib_api_plugin.dart';
+import '../../models/unified_shelf_item.dart';
 import '../../providers/books_provider.dart';
+import '../../providers/shelf_provider.dart';
+import '../../providers/weread_provider.dart';
 import '../../screens/book_detail/book_detail_screen.dart';
-import '../../services/booklist_import_service.dart';
 import '../../services/booklist_share_codec.dart';
 import '../../services/share_intent_handler.dart';
-import '../../utils/booklist_file_utils.dart';
-import '../../widgets/book_card.dart';
-import '../../widgets/book_list_tile.dart';
-import '../../widgets/share_preview_sheet.dart'; // [New]
-import 'scanner_screen.dart'; // [New]
 import '../../theme/app_colors.dart';
+import '../../routes/app_routes.dart';
+import 'widgets/shelf_filter_bar.dart';
+import 'widgets/shelf_book_item.dart';
+import 'widgets/shelf_import_handler.dart';
 
 class FavoritesScreen extends ConsumerStatefulWidget {
   const FavoritesScreen({super.key});
@@ -22,144 +23,148 @@ class FavoritesScreen extends ConsumerStatefulWidget {
   ConsumerState<FavoritesScreen> createState() => _FavoritesScreenState();
 }
 
-class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
+class _FavoritesScreenState extends ConsumerState<FavoritesScreen>
+    with ShelfImportHandler {
   bool _isListView = false;
   bool _isSelectMode = false;
   Set<int> _selectedBookIds = {};
 
   @override
   Widget build(BuildContext context) {
-    final savedBooksAsync = ref.watch(savedBooksProvider);
+    final shelfAsync = ref.watch(unifiedShelfProvider);
     final l = AppLocalizations.of(context);
 
-    // 系统分享/深链投递进来的书单，自动跑导入流程
+    // 书单导入监听
     ref.listen<BooklistShareData?>(pendingBooklistImportProvider,
         (prev, next) {
       if (next == null) return;
       ref.read(pendingBooklistImportProvider.notifier).state = null;
-      _runImport(l, next);
+      runImport(l, next);
     });
 
     return Scaffold(
-      body: savedBooksAsync.when(
-        data: (books) => CustomScrollView(
-          slivers: [
-            _buildSliverAppBar(l, books),
-            if (books.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: _buildEmptyState(l),
-              )
-            else ...[
-              SliverToBoxAdapter(child: _buildInfoBar(l, books.length)),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                sliver: _isListView
-                    ? _buildSliverList(books)
-                    : _buildSliverGrid(books),
-              ),
-            ],
-          ],
-        ),
-        loading: () => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text(l.get('loading_favorites')),
-            ],
-          ),
-        ),
-        error: (err, stack) => Center(
-          child: Text('${l.get('error')}: $err'),
-        ),
+      body: shelfAsync.when(
+        data: (items) => _buildBody(l, items),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, _) => Center(child: Text('$err')),
       ),
       bottomNavigationBar: _isSelectMode && _selectedBookIds.isNotEmpty
-          ? _buildBottomBar(l, savedBooksAsync)
+          ? _buildBottomBar(l)
           : null,
     );
   }
 
-  // ─── AppBar ───────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════
+  // Body
+  // ═══════════════════════════════════════════════════════════════════
 
-  Widget _buildSliverAppBar(AppLocalizations l, List<Book> books) {
+  Widget _buildBody(AppLocalizations l, List<UnifiedShelfItem> items) {
+    final filter = ref.watch(shelfFilterProvider);
+    final wereadItems =
+        items.where((i) => i.source == ShelfSource.weread).toList();
+    final libraryItems =
+        items.where((i) => i.source == ShelfSource.library).toList();
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(savedBooksProvider);
+        ref.invalidate(wereadShelfProvider);
+      },
+      child: CustomScrollView(
+        slivers: [
+          // ── AppBar ──
+          _buildAppBar(l, items),
+
+          // ── Filter + View Toggle ──
+          ShelfFilterBar(
+            wereadCount: wereadItems.length,
+            libraryCount: libraryItems.length,
+            isListView: _isListView,
+            onViewChanged: (v) => setState(() => _isListView = v),
+          ),
+
+          if (items.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _buildEmptyState(l),
+            )
+          else ...[
+            // ── WeRead Group ──
+            if (filter == null || filter == ShelfSource.weread)
+              if (wereadItems.isNotEmpty) ...[
+                _groupHeader(l.get('shelf_source_weread'),
+                    Icons.menu_book_rounded, wereadItems.length),
+                _bookSliver(wereadItems),
+              ],
+
+            // ── Library Group ──
+            if (filter == null || filter == ShelfSource.library)
+              if (libraryItems.isNotEmpty) ...[
+                _groupHeader(l.get('shelf_source_library'),
+                    Icons.local_library_rounded, libraryItems.length),
+                _bookSliver(libraryItems),
+              ],
+
+            const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // AppBar — 简洁版，不显示大标题
+  // ═══════════════════════════════════════════════════════════════════
+
+  Widget _buildAppBar(AppLocalizations l, List<UnifiedShelfItem> items) {
     if (_isSelectMode) {
       return SliverAppBar(
         pinned: true,
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: () => setState(() {
-            _isSelectMode = false;
-            _selectedBookIds.clear();
-          }),
+          onPressed: _exitSelectMode,
         ),
         title: Text(
-          '${_selectedBookIds.length} / ${books.length}',
+          '${_selectedBookIds.length} selected',
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         actions: [
           TextButton(
             onPressed: () {
-              final allIds =
-                  books.map((b) => b.id).whereType<int>().toSet();
+              final allLibIds = items
+                  .where((i) => i.source == ShelfSource.library)
+                  .map((i) => int.tryParse(i.rawBookId))
+                  .whereType<int>()
+                  .toSet();
               setState(() {
-                if (_selectedBookIds.length == allIds.length) {
+                if (_selectedBookIds.length == allLibIds.length) {
                   _selectedBookIds.clear();
                 } else {
-                  _selectedBookIds = Set.from(allIds);
+                  _selectedBookIds = Set.from(allLibIds);
                 }
               });
             },
-            child: Text(
-              _selectedBookIds.length == books.length
-                  ? l.get('deselect_all')
-                  : l.get('select_all'),
-            ),
+            child: Text(l.get('select_all')),
           ),
         ],
       );
     }
 
-    return SliverAppBar.large(
+    return SliverAppBar(
       pinned: true,
-      title: Text(
-        l.get('favorites'),
-        style: const TextStyle(fontWeight: FontWeight.w700),
-      ),
+      floating: true,
       actions: [
-        PopupMenuButton<_ImportSource>(
+        PopupMenuButton<ImportSource>(
           tooltip: l.get('import_booklist'),
           icon: const Icon(Icons.file_download_outlined),
-          onSelected: (src) => _handleImport(l, src),
-          itemBuilder: (ctx) => [
-            PopupMenuItem(
-              value: _ImportSource.scan,
-              child: ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.qr_code_scanner_rounded),
-                title: Text(l.get('import_from_scan')),
-              ),
-            ),
-            PopupMenuItem(
-              value: _ImportSource.paste,
-              child: ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.content_paste_rounded),
-                title: Text(l.get('import_from_paste')),
-              ),
-            ),
-            PopupMenuItem(
-              value: _ImportSource.file,
-              child: ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.insert_drive_file_outlined),
-                title: Text(l.get('import_from_file')),
-              ),
-            ),
+          onSelected: (src) => handleImport(l, src),
+          itemBuilder: (_) => [
+            _importMenuItem(ImportSource.scan, Icons.qr_code_scanner_rounded,
+                l.get('import_from_scan')),
+            _importMenuItem(ImportSource.paste,
+                Icons.content_paste_rounded, l.get('import_from_paste')),
+            _importMenuItem(ImportSource.file,
+                Icons.insert_drive_file_outlined, l.get('import_from_file')),
           ],
         ),
         const SizedBox(width: 4),
@@ -167,47 +172,164 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
     );
   }
 
-  // ─── Info Bar ─────────────────────────────────────────
+  PopupMenuItem<ImportSource> _importMenuItem(
+      ImportSource value, IconData icon, String text) {
+    return PopupMenuItem(
+      value: value,
+      child: ListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        leading: Icon(icon),
+        title: Text(text),
+      ),
+    );
+  }
 
-  Widget _buildInfoBar(AppLocalizations l, int count) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          Text(
-            l.get('books_count').replaceAll('%d', '$count'),
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const Spacer(),
-          // View mode toggle
-          Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardTheme.color,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant,
+  // ═══════════════════════════════════════════════════════════════════
+  // Group Header
+  // ═══════════════════════════════════════════════════════════════════
+
+  Widget _groupHeader(String title, IconData icon, int count) {
+    final cs = Theme.of(context).colorScheme;
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: cs.onSurface,
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildViewToggle(
-                  icon: Icons.grid_view_rounded,
-                  selected: !_isListView,
-                  onTap: () => setState(() => _isListView = false),
-                  tooltip: l.get('grid_view'),
+            const SizedBox(width: 6),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
                 ),
-                _buildViewToggle(
-                  icon: Icons.view_list_rounded,
-                  selected: _isListView,
-                  onTap: () => setState(() => _isListView = true),
-                  tooltip: l.get('list_view'),
-                ),
-              ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Book Sliver (Grid / List)
+  // ═══════════════════════════════════════════════════════════════════
+
+  Widget _bookSliver(List<UnifiedShelfItem> items) {
+    if (_isListView) {
+      return SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (_, i) => _listItemFor(items[i]),
+          childCount: items.length,
+        ),
+      );
+    }
+
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 200,
+          childAspectRatio: 0.58,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (_, i) => _gridItemFor(items[i]),
+          childCount: items.length,
+        ),
+      ),
+    );
+  }
+
+  Widget _gridItemFor(UnifiedShelfItem item) {
+    final bookId = _zlibId(item);
+    return ShelfGridItem(
+      item: item,
+      isSelectMode: _isSelectMode,
+      isSelected: bookId != null && _selectedBookIds.contains(bookId),
+      onTap: () => _onItemTap(item),
+      onLongPress: bookId != null ? () => _enterSelectMode(bookId) : null,
+    );
+  }
+
+  Widget _listItemFor(UnifiedShelfItem item) {
+    final bookId = _zlibId(item);
+    return ShelfListItem(
+      item: item,
+      isSelectMode: _isSelectMode,
+      isSelected: bookId != null && _selectedBookIds.contains(bookId),
+      onTap: () => _onItemTap(item),
+      onLongPress: bookId != null ? () => _enterSelectMode(bookId) : null,
+      onToggleSelect: bookId != null ? () => _toggleSelect(bookId) : null,
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Bottom Bar (select mode)
+  // ═══════════════════════════════════════════════════════════════════
+
+  Widget _buildBottomBar(AppLocalizations l) {
+    return Container(
+      padding: EdgeInsets.only(
+        left: 16, right: 16, top: 12,
+        bottom: MediaQuery.of(context).padding.bottom + 12,
+      ),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        border: Border(
+          top: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => confirmBatchRemove(
+                l, _selectedBookIds, _exitSelectMode,
+              ),
+              icon: const Icon(Icons.delete_outline_rounded, size: 20),
+              label: Text(l.get('batch_remove')),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red[400],
+                side: BorderSide(color: Colors.red[300]!),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: () => showSharePreview(l, _selectedBookIds),
+              icon: const Icon(Icons.share_rounded, size: 20),
+              label: Text(l.get('share_booklist')),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ),
         ],
@@ -215,154 +337,9 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
     );
   }
 
-  Widget _buildViewToggle({
-    required IconData icon,
-    required bool selected,
-    required VoidCallback onTap,
-    required String tooltip,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primary.withValues(alpha:0.12) : null,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(
-            icon,
-            size: 20,
-            color: selected
-                ? AppColors.primary
-                : Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ─── Grid View ────────────────────────────────────────
-
-  Widget _buildSliverGrid(List<Book> books) {
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 200,
-        childAspectRatio: 0.58,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final book = books[index];
-          final isSelected = _selectedBookIds.contains(book.id);
-
-          return GestureDetector(
-            onLongPress: () => _enterSelectModeWith(book.id),
-            child: Stack(
-              children: [
-                BookCard(
-                  book: book,
-                  onTap: () {
-                    if (_isSelectMode) {
-                      _toggleSelection(book.id);
-                    } else {
-                      _navigateToDetail(book);
-                    }
-                  },
-                ),
-                if (_isSelectMode)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: GestureDetector(
-                      onTap: () => _toggleSelection(book.id),
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppColors.primary
-                              : Colors.white.withValues(alpha: 0.9),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected
-                                ? AppColors.primary
-                                : Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant
-                                    .withValues(alpha: 0.4),
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: isSelected
-                            ? const Icon(Icons.check,
-                                size: 16, color: Colors.white)
-                            : null,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        },
-        childCount: books.length,
-      ),
-    );
-  }
-
-  // ─── List View ────────────────────────────────────────
-
-  Widget _buildSliverList(List<Book> books) {
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final book = books[index];
-          final isSelected = _selectedBookIds.contains(book.id);
-
-          final tile = _isSelectMode
-              ? Row(
-                  children: [
-                    Checkbox(
-                      value: isSelected,
-                      activeColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      onChanged: (_) => _toggleSelection(book.id),
-                    ),
-                    Expanded(
-                      child: BookListTile(
-                        book: book,
-                        onTap: () => _toggleSelection(book.id),
-                      ),
-                    ),
-                  ],
-                )
-              : BookListTile(
-                  book: book,
-                  onTap: () => _navigateToDetail(book),
-                );
-
-          return GestureDetector(
-            onLongPress: () => _enterSelectModeWith(book.id),
-            child: tile,
-          );
-        },
-        childCount: books.length,
-      ),
-    );
-  }
-
-  // ─── Empty State ──────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════
+  // Empty State
+  // ═══════════════════════════════════════════════════════════════════
 
   Widget _buildEmptyState(AppLocalizations l) {
     return Center(
@@ -372,25 +349,23 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha:0.08),
+              color: AppColors.primary.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.bookmark_border_rounded,
-              size: 56,
-              color: AppColors.primary.withValues(alpha:0.5),
-            ),
+            child: Icon(Icons.library_books_outlined,
+                size: 56, color: AppColors.primary.withValues(alpha: 0.5)),
           ),
           const SizedBox(height: 20),
           Text(
-            l.get('no_favorites'),
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            l.get('shelf_empty'),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Text(
-            l.get('save_books_hint'),
+            l.get('shelf_empty_message'),
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 14,
@@ -401,67 +376,42 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
     );
   }
 
-  // ─── Bottom Bar (select mode) ─────────────────────────
+  // ═══════════════════════════════════════════════════════════════════
+  // Helpers
+  // ═══════════════════════════════════════════════════════════════════
 
-  Widget _buildBottomBar(AppLocalizations l, AsyncValue<List<Book>> booksAsync) {
-    return Container(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 12,
-        bottom: MediaQuery.of(context).padding.bottom + 12,
-      ),
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        border: Border(
-          top: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant,
+  int? _zlibId(UnifiedShelfItem item) =>
+      item.source == ShelfSource.library
+          ? int.tryParse(item.rawBookId)
+          : null;
+
+  void _onItemTap(UnifiedShelfItem item) {
+    final bookId = _zlibId(item);
+    if (_isSelectMode && bookId != null) {
+      _toggleSelect(bookId);
+      return;
+    }
+
+    if (item.source == ShelfSource.weread) {
+      Navigator.of(context).pushNamed(
+        AppRoutes.wereadBookDetail,
+        arguments: item.rawBookId,
+      );
+    } else {
+      final original = item.displayBook.original;
+      if (original is Book) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const BookDetailScreen(),
+            settings: RouteSettings(arguments: original),
           ),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Batch remove
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _confirmBatchRemove(l),
-              icon: const Icon(Icons.delete_outline_rounded, size: 20),
-              label: Text(l.get('batch_remove')),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red[400],
-                side: BorderSide(color: Colors.red[300]!),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Share booklist
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: () => _showSharePreview(l, booksAsync),
-              icon: const Icon(Icons.share_rounded, size: 20),
-              label: Text(l.get('share_booklist')),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+        );
+      }
+    }
   }
 
-  // ─── Actions ──────────────────────────────────────────
-
-  void _toggleSelection(int? bookId) {
-    if (bookId == null) return;
+  void _toggleSelect(int bookId) {
     setState(() {
       if (_selectedBookIds.contains(bookId)) {
         _selectedBookIds.remove(bookId);
@@ -471,8 +421,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
     });
   }
 
-  void _enterSelectModeWith(int? bookId) {
-    if (bookId == null) return;
+  void _enterSelectMode(int bookId) {
     HapticFeedback.mediumImpact();
     setState(() {
       _isSelectMode = true;
@@ -480,171 +429,12 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
     });
   }
 
-  void _navigateToDetail(Book book) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const BookDetailScreen(),
-        settings: RouteSettings(arguments: book),
-      ),
-    );
-  }
-
-  void _confirmBatchRemove(AppLocalizations l) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l.get('confirm_remove_title')),
-        content: Text(
-          l.get('confirm_remove_msg').replaceAll('%d', '${_selectedBookIds.length}'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l.get('cancel')),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _batchRemove();
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red[400],
-            ),
-            child: Text(l.get('remove')),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _batchRemove() async {
-    final notifier = ref.read(savedBooksProvider.notifier);
-    for (final id in _selectedBookIds.toList()) {
-      await notifier.unsaveBook(id.toString());
-    }
+  void _exitSelectMode() {
     if (mounted) {
       setState(() {
-        _selectedBookIds.clear();
         _isSelectMode = false;
+        _selectedBookIds.clear();
       });
     }
   }
-
-  void _showSharePreview(AppLocalizations l, AsyncValue<List<Book>> booksAsync) {
-    final allBooks = booksAsync.valueOrNull ?? [];
-    final selectedBooks = allBooks
-        .where((b) => _selectedBookIds.contains(b.id))
-        .toList();
-
-    if (selectedBooks.isEmpty) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => SharePreviewSheet(books: selectedBooks),
-    );
-  }
-
-  Future<void> _handleImport(AppLocalizations l, _ImportSource source) async {
-    BooklistShareData? data;
-    switch (source) {
-      case _ImportSource.scan:
-        final scanned = await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ScannerScreen()),
-        );
-        if (scanned is String) {
-          data = BooklistShareCodec.tryDecode(scanned);
-        }
-        break;
-      case _ImportSource.paste:
-        data = await _pasteAndDecode(l);
-        break;
-      case _ImportSource.file:
-        try {
-          data = await BooklistFileUtils.pickAndParse();
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('${l.get('error')}: $e')),
-            );
-          }
-          return;
-        }
-        break;
-    }
-
-    if (!mounted) return;
-    if (data == null || data.entries.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l.get('invalid_booklist'))),
-      );
-      return;
-    }
-
-    await _runImport(l, data);
-  }
-
-  Future<BooklistShareData?> _pasteAndDecode(AppLocalizations l) async {
-    final clip = await Clipboard.getData('text/plain');
-    final initial = clip?.text ?? '';
-    if (!mounted) return null;
-
-    final controller = TextEditingController(text: initial);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l.get('paste_token')),
-        content: TextField(
-          controller: controller,
-          maxLines: 4,
-          decoration: InputDecoration(
-            hintText: l.get('paste_token_hint'),
-            border: const OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l.get('cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            child: Text(l.get('import')),
-          ),
-        ],
-      ),
-    );
-    if (result == null || result.trim().isEmpty) return null;
-    return BooklistShareCodec.tryDecode(result);
-  }
-
-  Future<void> _runImport(
-      AppLocalizations l, BooklistShareData data) async {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      SnackBar(content: Text(l.get('processing'))),
-    );
-
-    final service = ref.read(booklistImportServiceProvider);
-    final r = await service.importFromData(data);
-
-    if (!mounted) return;
-    messenger.hideCurrentSnackBar();
-    final msg = l
-        .get('import_result')
-        .replaceAll('%i', '${r.imported}')
-        .replaceAll('%s', '${r.skipped}')
-        .replaceAll('%f', '${r.failed}');
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: r.imported > 0 ? Colors.green : null,
-      ),
-    );
-  }
 }
-
-enum _ImportSource { scan, paste, file }

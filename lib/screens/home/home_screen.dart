@@ -12,6 +12,7 @@ import '../../widgets/book_card.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/domain_selector.dart';
+import '../../models/display_book.dart';
 import '../../routes/app_routes.dart';
 import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../../l10n/app_localizations.dart';
@@ -65,9 +66,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             if (index == 1) {
               Navigator.of(context).pushNamed(AppRoutes.search);
             } else if (index == 2) {
-              Navigator.of(context).pushNamed(AppRoutes.favorites);
+              Navigator.of(context).pushNamed(AppRoutes.wereadHome);
             } else if (index == 3) {
-              Navigator.of(context).pushNamed(AppRoutes.downloads); // Local downloads
+              Navigator.of(context).pushNamed(AppRoutes.favorites);
+            } else if (index == 4) {
+              Navigator.of(context).pushNamed(AppRoutes.downloads);
             } else {
               setState(() => _selectedIndex = index);
             }
@@ -84,9 +87,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               label: AppLocalizations.of(context).get('search'),
             ),
             BottomNavigationBarItem(
-              icon: const Icon(Icons.favorite_border),
-              activeIcon: const Icon(Icons.favorite),
-              label: AppLocalizations.of(context).get('favorites'),
+              icon: const Icon(Icons.menu_book_outlined),
+              activeIcon: const Icon(Icons.menu_book),
+              label: AppLocalizations.of(context).get('weread'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.library_books_outlined),
+              activeIcon: const Icon(Icons.library_books),
+              label: AppLocalizations.of(context).get('bookshelf'),
             ),
             BottomNavigationBarItem(
               icon: const Icon(Icons.cloud_download_outlined),
@@ -547,7 +555,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
           itemBuilder: (context, index) {
             final book = books[index];
             return BookCard(
-              book: book,
+              book: book.toDisplay(),
               onTap: () {
                 Navigator.of(context).pushNamed(
                   AppRoutes.bookDetail,

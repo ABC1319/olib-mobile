@@ -15,6 +15,7 @@ import 'widgets/about_section.dart';
 import 'widgets/language_section.dart';
 import 'widgets/theme_section.dart';
 import 'widgets/network_section.dart';
+import 'widgets/weread_settings_section.dart';
 import 'widgets/section_header.dart';
 import 'widgets/settings_card.dart';
 
@@ -56,6 +57,11 @@ class SettingsScreen extends ConsumerWidget {
 
           // ── Network ─────────────────────────────────────────────
           const NetworkSection(),
+
+          const SizedBox(height: 20),
+
+          // ── WeRead (微信读书) ─────────────────────────────────────
+          const WereadSettingsSection(),
 
           const SizedBox(height: 20),
 
