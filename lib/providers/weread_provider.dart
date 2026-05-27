@@ -104,12 +104,70 @@ final wereadNotebooksProvider =
   );
 });
 
-/// 个性化推荐
+/// 个性化推荐（分页）
+class WereadRecommendNotifier extends StateNotifier<AsyncValue<List<RecommendBook>>> {
+  final WereadApi? _api;
+  static const _initialCount = 20;
+  static const _pageSize = 40;
+  int _nextOffset = 0;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+
+  WereadRecommendNotifier(this._api) : super(const AsyncValue.loading()) {
+    _loadInitial();
+  }
+
+  bool get isLoadingMore => _isLoadingMore;
+  bool get hasMore => _hasMore;
+
+  Future<void> _loadInitial() async {
+    if (_api == null) {
+      state = const AsyncValue.data([]);
+      return;
+    }
+    try {
+      final resp = await _api!.recommend(count: _initialCount);
+      _nextOffset = resp.books.length;
+      _hasMore = resp.books.length >= _initialCount;
+      state = AsyncValue.data(resp.books);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<void> loadMore() async {
+    if (_isLoadingMore || !_hasMore || _api == null) return;
+    _isLoadingMore = true;
+    try {
+      final resp = await _api!.recommend(count: _pageSize, maxIdx: _nextOffset);
+      if (resp.books.isEmpty) {
+        _hasMore = false;
+      } else {
+        final existing = state.valueOrNull ?? [];
+        final existingIds = existing.map((b) => b.bookId).toSet();
+        final newBooks = resp.books.where((b) => !existingIds.contains(b.bookId)).toList();
+        _nextOffset += resp.books.length;
+        state = AsyncValue.data([...existing, ...newBooks]);
+      }
+    } catch (_) {
+      // 静默失败，保留已有数据
+    } finally {
+      _isLoadingMore = false;
+    }
+  }
+
+  Future<void> refresh() async {
+    _nextOffset = 0;
+    _hasMore = true;
+    state = const AsyncValue.loading();
+    await _loadInitial();
+  }
+}
+
 final wereadRecommendProvider =
-    FutureProvider<RecommendResponse?>((ref) async {
+    StateNotifierProvider<WereadRecommendNotifier, AsyncValue<List<RecommendBook>>>((ref) {
   final api = ref.watch(wereadApiProvider);
-  if (api == null) return null;
-  return await api.recommend();
+  return WereadRecommendNotifier(api);
 });
 
 /// 用户资料概况

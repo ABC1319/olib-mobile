@@ -430,9 +430,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   
                   const SizedBox(height: 24),
-                  
+
                   // Hint: Use Z-Library official account
                   _buildAccountHint(context),
+
+                  const SizedBox(height: 16),
+
+                  // Skip login — enter Home without Z-Library account
+                  _buildSkipLogin(context),
                 ],
               ),
             ),
@@ -496,6 +501,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
   
+  Widget _buildSkipLogin(BuildContext context) {
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+
+    return TextButton(
+      onPressed: () {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+      },
+      child: Text(
+        isZh ? '跳过登录，先逛逛' : 'Skip login, explore first',
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.7),
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+
   Widget _buildBadges(BuildContext context) {
     final isZh = Localizations.localeOf(context).languageCode == 'zh';
     

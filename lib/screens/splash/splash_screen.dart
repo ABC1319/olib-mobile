@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:io';
 import '../../providers/auth_provider.dart';
 import '../../providers/domain_provider.dart';
@@ -140,7 +141,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     while (!_networkOk && mounted) {
       final action = await _showLineUnavailableDialog();
       if (!mounted) return;
-      if (action == _LineAction.proceed) break;
+      if (action == _LineAction.proceed || action == _LineAction.skip) break;
       setState(() => _statusText = 'Checking network...');
       _networkOk = await _checkNetwork();
     }
@@ -164,6 +165,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               : 'Current line cannot reach Z-Library. Please switch to another line and retry.',
         ),
         actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, _LineAction.skip),
+            child: Text(isZh ? '跳过' : 'Skip'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, _LineAction.proceed),
             child: Text(isZh ? '仍然继续' : 'Continue anyway'),
@@ -475,13 +480,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       padding: EdgeInsets.only(
                         bottom: MediaQuery.of(context).padding.bottom + 24,
                       ),
-                      child: Text(
-                        'v1.0.6',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha:0.4),
-                          fontSize: 11,
-                          letterSpacing: 0.5,
-                        ),
+                      child: FutureBuilder<PackageInfo>(
+                        future: PackageInfo.fromPlatform(),
+                        builder: (context, snapshot) {
+                          final version = snapshot.data?.version ?? '...';
+                          return Text(
+                            'v$version',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha:0.4),
+                              fontSize: 11,
+                              letterSpacing: 0.5,
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -554,7 +565,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 }
 
-enum _LineAction { retry, proceed }
+enum _LineAction { retry, proceed, skip }
 
 // ════════════════════════════════════════════════════════════
 //  Custom Ring Spinner — elegant arc spinner

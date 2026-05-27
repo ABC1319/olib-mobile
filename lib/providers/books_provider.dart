@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:olib_api_plugin/olib_api_plugin.dart';
+import '../models/display_book.dart';
 import '../services/storage_service.dart';
 import 'zlibrary_provider.dart';
+import 'weread_provider.dart';
 
 // ── Search ──────────────────────────────────────────────────────────
 
@@ -177,6 +179,28 @@ final recommendedBooksProvider = FutureProvider<List<Book>>((ref) async {
   final api = ref.watch(zlibraryApiProvider);
   final response = await api.getUserRecommended();
   return response.data ?? [];
+});
+
+/// 首页混合推荐：并发拉 Z-Library + WeRead，合并为 DisplayBook 列表。
+/// Z-Library 失败/未登录时 graceful fallback 到仅 WeRead。
+final homeRecommendedProvider = Provider<AsyncValue<List<DisplayBook>>>((ref) {
+  final zlibAsync = ref.watch(recommendedBooksProvider);
+  final wereadAsync = ref.watch(wereadRecommendProvider);
+
+  // 两个来源独立，任一成功即显示
+  final zlibBooks = zlibAsync.whenData(
+    (books) => books.map((b) => b.toDisplay()).toList(),
+  ).valueOrNull ?? <DisplayBook>[];
+
+  final wereadBooks = wereadAsync.whenData(
+    (books) => books.map((b) => b.toDisplay()).toList(),
+  ).valueOrNull ?? <DisplayBook>[];
+
+  if (zlibAsync is AsyncLoading && wereadAsync is AsyncLoading) {
+    return const AsyncValue.loading();
+  }
+
+  return AsyncValue.data([...zlibBooks, ...wereadBooks]);
 });
 
 final recentBooksProvider = FutureProvider<List<Book>>((ref) async {

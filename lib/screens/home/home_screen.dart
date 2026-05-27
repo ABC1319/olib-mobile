@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:awesome_dialog/awesome_dialog.dart';
 import '../../providers/books_provider.dart';
+import '../../providers/weread_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/backend_auth_provider.dart';
 import '../../services/update_service.dart';
@@ -14,7 +15,6 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/domain_selector.dart';
 import '../../models/display_book.dart';
 import '../../routes/app_routes.dart';
-import 'package:olib_api_plugin/olib_api_plugin.dart';
 import '../../l10n/app_localizations.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -289,7 +289,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            user?.name ?? "Book Lover",
+                            user?.name ?? (isZh ? '读者' : 'Reader'),
                             style: theme.textTheme.displaySmall?.copyWith(
                               color: cs.onSurface,
                               fontWeight: FontWeight.bold,
@@ -471,7 +471,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
 
         // ========== 可滚动书籍网格 ==========
         Expanded(
-          child: _buildBookGrid(ref.watch(recommendedBooksProvider)),
+          child: _buildBookGrid(ref.watch(homeRecommendedProvider)),
         ),
       ],
     );
@@ -530,7 +530,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
     );
   }
 
-  Widget _buildBookGrid(AsyncValue<List<Book>> booksAsync) {
+  Widget _buildBookGrid(AsyncValue<List<DisplayBook>> booksAsync) {
     return booksAsync.when(
       data: (books) {
         if (books.isEmpty) {
@@ -543,6 +543,11 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
           );
         }
 
+        final notifier = ref.read(wereadRecommendProvider.notifier);
+        final hasMore = notifier.hasMore;
+        // +1 for loading indicator at bottom
+        final itemCount = books.length + (hasMore ? 1 : 0);
+
         return GridView.builder(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -551,16 +556,41 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
             crossAxisSpacing: 16,
             mainAxisSpacing: 20,
           ),
-          itemCount: books.length > 20 ? 20 : books.length,
+          itemCount: itemCount,
           itemBuilder: (context, index) {
+            // 预加载：距底部 6 个时触发
+            if (index >= books.length - 6 && hasMore) {
+              notifier.loadMore();
+            }
+
+            // 加载指示器
+            if (index >= books.length) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: 24, height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              );
+            }
+
             final book = books[index];
             return BookCard(
-              book: book.toDisplay(),
+              book: book,
               onTap: () {
-                Navigator.of(context).pushNamed(
-                  AppRoutes.bookDetail,
-                  arguments: book,
-                );
+                if (book.isWeread) {
+                  Navigator.of(context).pushNamed(
+                    AppRoutes.wereadBookDetail,
+                    arguments: book.id,
+                  );
+                } else {
+                  Navigator.of(context).pushNamed(
+                    AppRoutes.bookDetail,
+                    arguments: book.asZLibBook,
+                  );
+                }
               },
             );
           },
