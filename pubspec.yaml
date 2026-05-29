@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.2.0+10200
+version: 1.2.1+10201
 
 environment:
   sdk: ^3.10.0
@@ -119,7 +119,7 @@ msix_config:
   publisher: CN=Olib Team
   publisher_display_name: Olib Team
   identity_name: com.olib.mobile
-  msix_version: 1.2.0.0
+  msix_version: 1.2.1.0
   logo_path: assets/icons/z.png
   capabilities: internetClient, internetClientServer
   languages: en-us, zh-cn, ja-jp, ko-kr

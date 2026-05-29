@@ -2,7 +2,7 @@
 ; Run this script with Inno Setup Compiler to create the installer
 
 #define MyAppName "Olib"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.2.1"
 #define MyAppPublisher "Olib Team"
 #define MyAppURL "https://github.com/shiyi-0x7f/olib-mobile"
 #define MyAppExeName "olib.exe"
